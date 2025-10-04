@@ -1,48 +1,81 @@
--- PetyaX Premium - Fixed Version
-local PetyaX = {}
-PetyaX.ScriptKey = script_key or ""
-PetyaX.API_URL = "http://127.0.0.1:5000"
+-- PetyaX Premium - Working Version
+print("🚀 Script started...")
 
--- Simple working HWID
-function PetyaX:GenerateHWID()
+-- Basic variables
+local ScriptKey = script_key or ""
+local API_URL = "http://127.0.0.1:5000"
+
+print("🔑 Key received:", ScriptKey)
+
+-- Super simple HWID
+local function GenerateHWID()
     return "hwid_" .. tostring(tick())
 end
 
-function PetyaX:Authenticate()
-    if not self.ScriptKey or self.ScriptKey == "" then
-        print("❌ No license key provided!")
+local function Authenticate()
+    if ScriptKey == "" then
+        print("❌ ERROR: No script_key provided!")
         return false
     end
     
-    local hwid = self:GenerateHWID()
-    print("🔑 Key:", self.ScriptKey)
-    print("🆔 HWID:", hwid)
+    -- Validate key format
+    if not string.match(ScriptKey, "^PXL_%w+$") then
+        print("❌ ERROR: Invalid key format!")
+        return false
+    end
+    
+    local hwid = GenerateHWID()
+    print("🆔 Generated HWID:", hwid)
+    
+    -- Test API connection
+    local api_url = API_URL .. "/verify?key=" .. ScriptKey .. "&hwid=" .. hwid
+    print("🌐 Calling API:", api_url)
     
     local success, result = pcall(function()
-        return game:HttpGet(self.API_URL .. "/verify?key=" .. self.ScriptKey .. "&hwid=" .. hwid)
+        return game:HttpGet(api_url)
     end)
     
     if not success then
-        print("❌ API Error:", result)
+        print("❌ API Connection Failed:", result)
         return false
     end
     
     print("✅ API Response:", result)
-    local data = game:GetService("HttpService"):JSONDecode(result)
+    
+    -- Parse JSON response
+    local jsonSuccess, data = pcall(function()
+        return game:GetService("HttpService"):JSONDecode(result)
+    end)
+    
+    if not jsonSuccess then
+        print("❌ JSON Parse Failed")
+        return false
+    end
     
     if data.success then
-        print("🎉 Authentication successful!")
+        print("🎉 AUTHENTICATION SUCCESS!")
+        if data.first_time then
+            print("🔒 First use - HWID locked!")
+        end
         return true
     else
-        print("❌ Auth failed:", data.error)
+        print("❌ AUTH FAILED:", data.error)
         return false
     end
 end
 
--- Test authentication
-if PetyaX:Authenticate() then
-    print("🚀 Loading premium features...")
-    -- Your features here
+-- Main execution
+print("🔐 Starting authentication...")
+if Authenticate() then
+    print("")
+    print("✨✨✨ PetyaX Premium Activated! ✨✨✨")
+    print("🎯 Loading premium features...")
+    print("")
+    
+    -- YOUR ACTUAL SCRIPT FEATURES GO HERE
+    
 else
-    print("💥 Failed to load")
+    print("")
+    print("💥 PetyaX Failed to Load")
+    print("📞 Contact support in Discord")
 end
