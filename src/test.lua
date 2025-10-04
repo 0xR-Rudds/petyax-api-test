@@ -1,4 +1,4 @@
--- PetyaX Premium - Working HWID Auth
+-- PetyaX Premium - Working HWID Authhhhhh
 print("🚀 PetyaX Premium Loading...")
 
 local PetyaX = {}
@@ -60,7 +60,6 @@ function PetyaX:Authenticate()
     -- FIXED: Accept any length after PXL_
     if not self.ScriptKey:match("^PXL_[A-Z0-9]+$") then
         print("❌ ERROR: Invalid key format!")
-        print("💡 Key should start with PXL_ followed by letters/numbers")
         return false
     end
     
