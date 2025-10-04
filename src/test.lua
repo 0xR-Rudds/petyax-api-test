@@ -57,12 +57,14 @@ function PetyaX:Authenticate()
         return false
     end
     
-    if not self.ScriptKey:match("^PXL_[A-Z0-9]{10}$") then
+    -- FIXED: Accept any length after PXL_
+    if not self.ScriptKey:match("^PXL_[A-Z0-9]+$") then
         print("❌ ERROR: Invalid key format!")
+        print("💡 Key should start with PXL_ followed by letters/numbers")
         return false
     end
     
-    print("🔑 Key:", self.ScriptKey:sub(1, 8) .. "****")
+    print("🔑 Key:", self.ScriptKey)
     
     -- Generate HWID
     local hwid = self:GetCachedHWID()
