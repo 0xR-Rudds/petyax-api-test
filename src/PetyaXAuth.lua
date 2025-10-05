@@ -51,7 +51,7 @@ if data.success then
     
     -- Load main script
     print("📦 Loading main script...")
-    local main_url = "https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/main.lua"
+    local main_url = "https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/PetyaAPI-Library.lua"
     local loadSuccess, loadError = pcall(function()
         local main_script = game:HttpGet(main_url)
         loadstring(main_script)()
@@ -63,3 +63,4 @@ if data.success then
 else
     print("❌ Auth failed:", data.error or "Unknown error")
 end
+
