@@ -2,7 +2,7 @@ local script_key = script_key or ""
 if script_key == "" then return end
 
 local API_URL = "http://127.0.0.1:5000"
-local MAIN_SCRIPT_URL = "https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/main.lua"
+local MAIN_SCRIPT_URL = "https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/idk.lua"
 
 local PetyaX = {}
 PetyaX.ScriptKey = script_key
@@ -45,3 +45,4 @@ end
 if PetyaX:Authenticate() then
     PetyaX:LoadMainScript()
 end
+
