@@ -1,343 +1,258 @@
--- PetyaX-API: Premium Roblox Development Framework
--- Developed by Rudds (0xR)
--- Authentication Required
-
-local PetyaX = {Version = "1.0.0"}
-
--- Authentication Check
-local function Authenticate()
-    local script_key = getgenv().script_key or ""
-    
-    if not script_key or script_key == "" then
-        error("❌ PetyaX-API: No license key provided. Use: script_key = 'YOUR_PXL_KEY'")
-    end
-    
-    if not script_key:match("^PXL_[A-Z0-9]+$") then
-        error("❌ PetyaX-API: Invalid license key format")
-    end
-    
-    -- Verify with authentication server
-    local API_URL = "http://127.0.0.1:5000"
-    local hwid = "machine_" .. game:GetService("RbxAnalyticsService"):GetClientId() .. "|executor_" .. (getexecutorname and getexecutorname() or "unknown")
-    
-    local success, result = pcall(function()
-        return game:HttpGet(API_URL .. "/verify?key=" .. script_key .. "&hwid=" .. hwid)
-    end)
-    
-    if not success then
-        error("❌ PetyaX-API: Authentication server unavailable")
-    end
-    
-    local jsonSuccess, data = pcall(function()
-        return game:GetService("HttpService"):JSONDecode(result)
-    end)
-    
-    if not jsonSuccess or not data.success then
-        error("❌ PetyaX-API: Authentication failed - " .. (data.error or "Invalid key"))
-    end
-    
-    return true
-end
-
--- Perform authentication
-local authSuccess, authError = pcall(Authenticate)
-if not authSuccess then
-    error(authError)
-end
-
--- Loaded check
-if getgenv().PetyaX then
-    return getgenv().PetyaX
-end
-
--- Load core modules
-getgenv().AirHub = {}
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Exunys/AirHub/main/Modules/Aimbot.lua"))()
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Exunys/AirHub/main/Modules/Wall%20Hack.lua"))()
-
--- Transfer to namespace
-PetyaX._Aimbot = getgenv().AirHub.Aimbot
-PetyaX._WallHack = getgenv().AirHub.WallHack
-
--- Available body parts for targeting
-PetyaX.BodyParts = {
-    "Head", "HumanoidRootPart", "Torso", "Left Arm", "Right Arm", 
-    "Left Leg", "Right Leg", "LeftHand", "RightHand", "LeftLowerArm",
-    "RightLowerArm", "LeftUpperArm", "RightUpperArm", "LeftFoot", 
-    "LeftLowerLeg", "UpperTorso", "LeftUpperLeg", "RightFoot", 
-    "RightLowerLeg", "LowerTorso", "RightUpperLeg"
+-- PetyaX-API.lua - Main API File
+local PetyaX = {
+    _VERSION = "2.2.0",
+    _AUTHOR = "PetyaX Premium",
+    _LICENSE = "Lifetime"
 }
 
--- Aimbot API
-PetyaX.Aimbot = {}
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
+local CurrentCamera = workspace.CurrentCamera
 
-function PetyaX.Aimbot:Enable()
-    PetyaX._Aimbot.Settings.Enabled = true
-    return "🎯 Aimbot enabled"
-end
+-- Authentication
+getgenv().PetyaXAuth = loadstring(game:HttpGet("https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/refs/heads/main/src/PetyaXAuth.lua"))()
 
-function PetyaX.Aimbot:Disable()
-    PetyaX._Aimbot.Settings.Enabled = false
-    return "🎯 Aimbot disabled"
-end
+-- Load New Aimbot Module
+PetyaX.Aimbot = loadstring(game:HttpGet("https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/refs/heads/main/src/Aimbot.lua"))()
 
-function PetyaX.Aimbot:SetTarget(partName)
-    if table.find(PetyaX.BodyParts, partName) then
-        PetyaX._Aimbot.Settings.LockPart = partName
-        return "🎯 Target set to: " .. partName
-    else
-        return "❌ Invalid body part: " .. tostring(partName)
-    end
-end
+-- Load New ESP Module
+PetyaX.ESP = loadstring(game:HttpGet("https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/refs/heads/main/src/Esp.lua"))()
 
-function PetyaX.Aimbot:SetSensitivity(value)
-    PetyaX._Aimbot.Settings.Sensitivity = math.clamp(value, 0, 1)
-    return "🎯 Sensitivity set to: " .. value
-end
-
-function PetyaX.Aimbot:SetHotkey(key)
-    PetyaX._Aimbot.Settings.TriggerKey = key
-    return "🎯 Hotkey set to: " .. key
-end
-
-function PetyaX.Aimbot:SetFOV(options)
-    if options.Enabled ~= nil then
-        PetyaX._Aimbot.FOVSettings.Enabled = options.Enabled
-    end
-    if options.Size then
-        PetyaX._Aimbot.FOVSettings.Amount = math.clamp(options.Size, 10, 300)
-    end
-    if options.Color then
-        PetyaX._Aimbot.FOVSettings.Color = options.Color
-    end
-    if options.Visible ~= nil then
-        PetyaX._Aimbot.FOVSettings.Visible = options.Visible
-    end
-    return "🎯 FOV configured"
-end
-
-function PetyaX.Aimbot:SetSafetyChecks(options)
-    if options.TeamCheck ~= nil then
-        PetyaX._Aimbot.Settings.TeamCheck = options.TeamCheck
-    end
-    if options.WallCheck ~= nil then
-        PetyaX._Aimbot.Settings.WallCheck = options.WallCheck
-    end
-    if options.AliveCheck ~= nil then
-        PetyaX._Aimbot.Settings.AliveCheck = options.AliveCheck
-    end
-    return "🎯 Safety checks updated"
-end
-
-function PetyaX.Aimbot:Setup(config)
-    local results = {}
+-- Memory Management (Keep this as it's essential)
+PetyaX.Memory = {
+    Read = function(address, type)
+        local success, result = pcall(function()
+            return readmemory(address, type)
+        end)
+        return success and result or nil
+    end,
     
-    if config.Enabled ~= nil then
-        table.insert(results, self:Enable())
-    end
+    Write = function(address, value, type)
+        local success, result = pcall(function()
+            return writememory(address, value, type)
+        end)
+        return success
+    end,
     
-    if config.Target then
-        table.insert(results, self:SetTarget(config.Target))
+    ReadString = function(address, length)
+        local success, result = pcall(function()
+            return readstring(address, length)
+        end)
+        return success and result or ""
     end
+}
+
+-- Drawing Utilities (Keep for external use)
+PetyaX.Drawing = {
+    Line = function(from, to, color, thickness)
+        local line = Drawing.new("Line")
+        line.From = from
+        line.To = to
+        line.Color = color or Color3.new(1, 1, 1)
+        line.Thickness = thickness or 1
+        line.Visible = true
+        return line
+    end,
     
-    if config.Sensitivity then
-        table.insert(results, self:SetSensitivity(config.Sensitivity))
-    end
+    Box = function(position, size, color, thickness, filled)
+        local box = Drawing.new("Square")
+        box.Position = position
+        box.Size = size
+        box.Color = color or Color3.new(1, 1, 1)
+        box.Thickness = thickness or 1
+        box.Filled = filled or false
+        box.Visible = true
+        return box
+    end,
     
-    if config.Hotkey then
-        table.insert(results, self:SetHotkey(config.Hotkey))
-    end
+    Text = function(text, position, color, size, outline, center)
+        local textDraw = Drawing.new("Text")
+        textDraw.Text = text or ""
+        textDraw.Position = position or Vector2.new(0, 0)
+        textDraw.Color = color or Color3.new(1, 1, 1)
+        textDraw.Size = size or 16
+        textDraw.Outline = outline or false
+        textDraw.Center = center or false
+        textDraw.Visible = true
+        return textDraw
+    end,
     
-    if config.FOV then
-        table.insert(results, self:SetFOV(config.FOV))
+    Circle = function(position, radius, color, thickness, filled, numSides)
+        local circle = Drawing.new("Circle")
+        circle.Position = position or Vector2.new(0, 0)
+        circle.Radius = radius or 50
+        circle.Color = color or Color3.new(1, 1, 1)
+        circle.Thickness = thickness or 1
+        circle.Filled = filled or false
+        circle.NumSides = numSides or 30
+        circle.Visible = true
+        return circle
     end
+}
+
+-- Entity Management (Keep for external use)
+PetyaX.Entities = {
+    GetPlayers = function()
+        return Players:GetPlayers()
+    end,
     
-    if config.Safety then
-        table.insert(results, self:SetSafetyChecks(config.Safety))
-    end
+    GetAlivePlayers = function()
+        local alive = {}
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Character and player.Character:FindFirstChildOfClass("Humanoid") and player.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
+                table.insert(alive, player)
+            end
+        end
+        return alive
+    end,
     
-    return results
-end
+    GetClosestPlayer = function()
+        local closestPlayer = nil
+        local closestDistance = math.huge
+        local localCharacter = LocalPlayer.Character
+        local localRoot = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
+        
+        if not localRoot then return nil end
+        
+        for _, player in pairs(PetyaX.Entities.GetAlivePlayers()) do
+            if player ~= LocalPlayer then
+                local character = player.Character
+                local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+                
+                if rootPart then
+                    local distance = (localRoot.Position - rootPart.Position).Magnitude
+                    if distance < closestDistance then
+                        closestDistance = distance
+                        closestPlayer = player
+                    end
+                end
+            end
+        end
+        
+        return closestPlayer, closestDistance
+    end
+}
 
--- ESP API
-PetyaX.ESP = {}
-
-function PetyaX.ESP:Enable()
-    PetyaX._WallHack.Settings.Enabled = true
-    return "👁️ ESP enabled"
-end
-
-function PetyaX.ESP:Disable()
-    PetyaX._WallHack.Settings.Enabled = false
-    return "👁️ ESP disabled"
-end
-
-function PetyaX.ESP:SetBoxes(options)
-    if options.Enabled ~= nil then
-        PetyaX._WallHack.Visuals.BoxSettings.Enabled = options.Enabled
-    end
-    if options.Color then
-        PetyaX._WallHack.Visuals.BoxSettings.Color = options.Color
-    end
-    if options.Thickness then
-        PetyaX._WallHack.Visuals.BoxSettings.Thickness = math.clamp(options.Thickness, 1, 5)
-    end
-    if options.Type then
-        PetyaX._WallHack.Visuals.BoxSettings.Type = options.Type == "3D" and 1 or 2
-    end
-    return "👁️ Box ESP configured"
-end
-
-function PetyaX.ESP:SetTracers(options)
-    if options.Enabled ~= nil then
-        PetyaX._WallHack.Visuals.TracersSettings.Enabled = options.Enabled
-    end
-    if options.Color then
-        PetyaX._WallHack.Visuals.TracersSettings.Color = options.Color
-    end
-    if options.Thickness then
-        PetyaX._WallHack.Visuals.TracersSettings.Thickness = math.clamp(options.Thickness, 1, 5)
-    end
-    if options.From then
-        local positions = {Bottom = 1, Center = 2, Mouse = 3}
-        PetyaX._WallHack.Visuals.TracersSettings.Type = positions[options.From] or 1
-    end
-    return "👁️ Tracers configured"
-end
-
-function PetyaX.ESP:SetHealthBars(options)
-    if options.Enabled ~= nil then
-        PetyaX._WallHack.Visuals.HealthBarSettings.Enabled = options.Enabled
-    end
-    if options.Position then
-        local positions = {Top = 1, Bottom = 2, Left = 3, Right = 4}
-        PetyaX._WallHack.Visuals.HealthBarSettings.Type = positions[options.Position] or 3
-    end
-    return "👁️ Health bars configured"
-end
-
-function PetyaX.ESP:SetNames(options)
-    if options.Enabled ~= nil then
-        PetyaX._WallHack.Visuals.ESPSettings.DisplayName = options.Enabled
-    end
-    if options.Color then
-        PetyaX._WallHack.Visuals.ESPSettings.TextColor = options.Color
-    end
-    if options.Size then
-        PetyaX._WallHack.Visuals.ESPSettings.TextSize = math.clamp(options.Size, 8, 24)
-    end
-    return "👁️ Name ESP configured"
-end
-
-function PetyaX.ESP:SetChams(options)
-    if options.Enabled ~= nil then
-        PetyaX._WallHack.Visuals.ChamsSettings.Enabled = options.Enabled
-    end
-    if options.Color then
-        PetyaX._WallHack.Visuals.ChamsSettings.Color = options.Color
-    end
-    if options.Filled ~= nil then
-        PetyaX._WallHack.Visuals.ChamsSettings.Filled = options.Filled
-    end
-    return "👁️ Chams configured"
-end
-
-function PetyaX.ESP:Setup(config)
-    local results = {}
+-- Camera Utilities (Keep for external use)
+PetyaX.Camera = {
+    WorldToViewport = function(position)
+        return CurrentCamera:WorldToViewportPoint(position)
+    end,
     
-    if config.Enabled ~= nil then
-        table.insert(results, self:Enable())
-    end
+    ViewportToWorld = function(position, depth)
+        return CurrentCamera:ViewportPointToRay(position.X, position.Y, depth or 0)
+    end,
     
-    if config.Boxes then
-        table.insert(results, self:SetBoxes(config.Boxes))
+    ScreenToWorld = function(position)
+        local mouse = UserInputService:GetMouseLocation()
+        return CurrentCamera:ScreenPointToRay(mouse.X, mouse.Y)
     end
+}
+
+-- Crosshair System (Keep this as it's separate from ESP/Aimbot)
+PetyaX.Crosshair = {
+    _enabled = false,
+    _lines = {},
     
-    if config.Tracers then
-        table.insert(results, self:SetTracers(config.Tracers))
-    end
+    Setup = function(self, config)
+        self:Destroy()
+        
+        if not config or not config.Enabled then
+            return "Crosshair disabled"
+        end
+        
+        self._enabled = true
+        
+        local centerX = CurrentCamera.ViewportSize.X / 2
+        local centerY = CurrentCamera.ViewportSize.Y / 2
+        local size = config.Style and config.Style.Size or 14
+        local color = config.Style and config.Style.Color or Color3.new(1, 1, 0)
+        
+        -- Horizontal line
+        local horizontal = Drawing.new("Line")
+        horizontal.From = Vector2.new(centerX - size, centerY)
+        horizontal.To = Vector2.new(centerX + size, centerY)
+        horizontal.Color = color
+        horizontal.Thickness = 2
+        horizontal.Visible = true
+        table.insert(self._lines, horizontal)
+        
+        -- Vertical line
+        local vertical = Drawing.new("Line")
+        vertical.From = Vector2.new(centerX, centerY - size)
+        vertical.To = Vector2.new(centerX, centerY + size)
+        vertical.Color = color
+        vertical.Thickness = 2
+        vertical.Visible = true
+        table.insert(self._lines, vertical)
+        
+        -- Center dot
+        if config.Style and config.Style.CenterDot then
+            local dot = Drawing.new("Circle")
+            dot.Position = Vector2.new(centerX, centerY)
+            dot.Radius = 2
+            dot.Color = color
+            dot.Thickness = 2
+            dot.Filled = true
+            dot.Visible = true
+            table.insert(self._lines, dot)
+        end
+        
+        return "Crosshair enabled"
+    end,
     
-    if config.HealthBars then
-        table.insert(results, self:SetHealthBars(config.HealthBars))
+    Destroy = function(self)
+        for _, line in pairs(self._lines) do
+            if line and typeof(line) == "table" then
+                line:Remove()
+            end
+        end
+        self._lines = {}
+        self._enabled = false
     end
+}
+
+-- Utility Functions (Keep these)
+PetyaX.Utils = {
+    Round = function(num, decimalPlaces)
+        local multiplier = 10^(decimalPlaces or 0)
+        return math.floor(num * multiplier + 0.5) / multiplier
+    end,
     
-    if config.Names then
-        table.insert(results, self:SetNames(config.Names))
-    end
+    TableToString = function(tbl)
+        return HttpService:JSONEncode(tbl)
+    end,
     
-    if config.Chams then
-        table.insert(results, self:SetChams(config.Chams))
-    end
+    StringToTable = function(str)
+        return HttpService:JSONDecode(str)
+    end,
     
-    return results
-end
-
--- Crosshair API
-PetyaX.Crosshair = {}
-
-function PetyaX.Crosshair:Enable()
-    PetyaX._WallHack.Crosshair.Settings.Enabled = true
-    return "🎨 Crosshair enabled"
-end
-
-function PetyaX.Crosshair:Disable()
-    PetyaX._WallHack.Crosshair.Settings.Enabled = false
-    return "🎨 Crosshair disabled"
-end
-
-function PetyaX.Crosshair:SetStyle(options)
-    if options.Size then
-        PetyaX._WallHack.Crosshair.Settings.Size = math.clamp(options.Size, 8, 24)
+    GetGameName = function()
+        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
     end
-    if options.Thickness then
-        PetyaX._WallHack.Crosshair.Settings.Thickness = math.clamp(options.Thickness, 1, 5)
-    end
-    if options.Color then
-        PetyaX._WallHack.Crosshair.Settings.Color = options.Color
-    end
-    if options.Gap then
-        PetyaX._WallHack.Crosshair.Settings.GapSize = math.clamp(options.Gap, 0, 20)
-    end
-    if options.CenterDot ~= nil then
-        PetyaX._WallHack.Crosshair.Settings.CenterDot = options.CenterDot
-    end
-    return "🎨 Crosshair style updated"
-end
+}
 
-function PetyaX.Crosshair:Setup(config)
-    local results = {}
-    
-    if config.Enabled ~= nil then
-        table.insert(results, self:Enable())
-    end
-    
-    if config.Style then
-        table.insert(results, self:SetStyle(config.Style))
-    end
-    
-    return results
-end
+-- API Information
+PetyaX.Info = {
+    Version = PetyaX._VERSION,
+    Author = PetyaX._AUTHOR,
+    License = PetyaX._LICENSE,
+    Features = {
+        "Modern Aimbot System",
+        "Advanced ESP 2025",
+        "Memory Management",
+        "Crosshair System",
+        "Entity Utilities",
+        "Drawing API"
+    }
+}
 
--- Utility Functions
-function PetyaX:GetVersion()
-    return self.Version
-end
-
-function PetyaX:GetBodyParts()
-    return self.BodyParts
-end
-
-function PetyaX:ResetAll()
-    PetyaX._Aimbot.Functions:ResetSettings()
-    PetyaX._WallHack.Functions:ResetSettings()
-    return "🔧 All settings reset"
-end
-
--- Success message
-print("✨ PetyaX-API v" .. PetyaX.Version .. " loaded successfully!")
-print("🔑 Authenticated user with valid license")
-
--- Set global
-getgenv().PetyaX = PetyaX
+-- Initialize message
+print("🎯 PetyaX Premium " .. PetyaX._VERSION .. " Loaded!")
+print("📝 Features: " .. table.concat(PetyaX.Info.Features, ", "))
 
 return PetyaX
