@@ -1,58 +1,63 @@
--- PetyaXAuth.lua - ORIGINAL WORKING VERSION
-local PetyaXAuth = {}
+--Latest
+print("🔐 Auth script loaded!")
+local key = script_key or "NO_KEY"
+print("Key received:", key)
 
-local API_URL = "http://127.0.0.1:5000/verify"
-local HWID = nil
+if not key or key == "" then return end
+if not key:match("^PXL_") then return end
 
-function PetyaXAuth.GenerateHWID()
-    if HWID then return HWID end
+print("🔄 Starting authentication...")
+
+-- Generate HWID
+local client_id = game:GetService("RbxAnalyticsService"):GetClientId() or "unknown"
+local executor_name = getexecutorname and getexecutorname() or "unknown"
+local hwid = "machine_" .. client_id .. "|executor_" .. executor_name
+
+-- Call API
+local api_url = "http://127.0.0.1:5000/verify?key=" .. key .. "&hwid=" .. hwid
+
+local success, result = pcall(function()
+    return game:HttpGet(api_url)
+end)
+
+if not success then 
+    print("❌ API Error:", result)
+    return 
+end
+
+local jsonSuccess, data = pcall(function()
+    return game:GetService("HttpService"):JSONDecode(result)
+end)
+
+if not jsonSuccess then 
+    print("❌ JSON Error")
+    return 
+end
+
+if data.success then
+    print("🎉 Authentication successful!")
     
-    local identifiers = ""
+    -- CORRECT MAIN SCRIPT URL
+    local main_url = "https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/PetyaAPI-Library.lua"
+    print("📦 Loading main script: " .. main_url)
     
-    -- Get system identifiers
-    local success, result = pcall(function()
-        identifiers = identifiers .. tostring(tick())
-        
-        if game:GetService("Players").LocalPlayer then
-            identifiers = identifiers .. tostring(game:GetService("Players").LocalPlayer.UserId)
+    local loadSuccess, content = pcall(function()
+        return game:HttpGet(main_url)
+    end)
+    
+    if loadSuccess then
+        print("✅ Main script downloaded!")
+        local execSuccess, execError = pcall(function()
+            loadstring(content)()
+        end)
+        if execSuccess then
+            print("✨ Main script executed successfully!")
+        else
+            print("❌ Main script execution error:", execError)
         end
-        
-        identifiers = identifiers .. tostring(math.random(10000, 99999))
-    end)
-    
-    HWID = tostring(string.len(identifiers)) .. string.sub(identifiers, 1, 10)
-    return HWID
-end
-
-function PetyaXAuth.VerifyKey(Key)
-    if not Key or Key == "" then
-        return false, "No key provided"
-    end
-    
-    local hwid = PetyaXAuth.GenerateHWID()
-    
-    local success, result = pcall(function()
-        local url = API_URL .. "?key=" .. Key .. "&hwid=" .. hwid
-        return game:HttpGet(url)
-    end)
-    
-    if not success then
-        return false, "API connection failed"
-    end
-    
-    local parseSuccess, responseData = pcall(function()
-        return game:GetService("HttpService"):JSONDecode(result)
-    end)
-    
-    if not parseSuccess then
-        return false, "Invalid API response"
-    end
-    
-    if responseData.success then
-        return true, responseData.message or "Verification successful"
     else
-        return false, responseData.error or "Verification failed"
+        print("❌ Failed to download main script:", content)
     end
+else
+    print("❌ Auth failed:", data.error)
 end
-
-return PetyaXAuth
