@@ -1,4 +1,4 @@
--- PetyaX FPS Aimbot - Rivals, HyperShot, Counter Blox
+-- PetyaX FPS Aimbot - Fixed Version
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -13,12 +13,12 @@ local PetyaXAimbot = {
     
     -- Targeting
     AimPart = "Head",
-    AutoSwitchPart = true, -- Switch to body if head not visible
+    AutoSwitchPart = true,
     
     -- Sensitivity & Smoothing
-    Sensitivity = 50, -- In-game sensitivity (1-100)
-    Smoothing = 0.3, -- Aim smoothing (0.1-1.0)
-    SmoothingCurve = "Linear", -- Linear, Quadratic, Cubic
+    Sensitivity = 50,
+    Smoothing = 0.3,
+    SmoothingCurve = "Linear",
     
     -- FOV & Range
     FOV = 80,
@@ -48,7 +48,7 @@ function PetyaXAimbot:GetSmoothFactor()
 end
 
 -- Apply smoothing curve
-function PetyaXAimbot:ApplySmoothing(current, target, delta)
+function PetyaXAimbot:ApplySmoothing(current, target)
     local smoothFactor = self:GetSmoothFactor()
     
     if self.SmoothingCurve == "Quadratic" then
@@ -113,9 +113,9 @@ function PetyaXAimbot:CalculatePrediction(character, part)
     -- Get target velocity
     local velocity = rootPart.Velocity
     
-    -- Estimate bullet travel time (adjust based on game)
+    -- Estimate bullet travel time
     local distance = (part.Position - CurrentCamera.CFrame.Position).Magnitude
-    local travelTime = distance / 1000 -- Adjust this value per game
+    local travelTime = distance / 1000
     
     -- Apply prediction
     return part.Position + (velocity * travelTime * self.PredictionStrength)
@@ -135,7 +135,7 @@ function PetyaXAimbot:GetBestTarget()
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         if not humanoid or humanoid.Health <= 0 then goto continue end
         
-        -- ENEMY ONLY CHECK - Only target players not on our team
+        -- ENEMY ONLY CHECK
         if self.TeamCheck then
             if player.Team and localTeam and player.Team == localTeam then
                 goto continue -- Skip teammates
@@ -189,7 +189,7 @@ function PetyaXAimbot:AimAtTarget(target)
     
     -- Apply smoothing
     local currentLook = currentCFrame.LookVector
-    local smoothedLook = self:ApplySmoothing(currentLook, lookVector, RunService.RenderStepped:Wait())
+    local smoothedLook = self:ApplySmoothing(currentLook, lookVector)
     
     -- Set camera
     camera.CFrame = CFrame.lookAt(currentCFrame.Position, currentCFrame.Position + smoothedLook)
@@ -209,7 +209,7 @@ function PetyaXAimbot:AimbotLoop()
     end
 end
 
--- Setup function
+-- Setup function (FIXED CONCATENATION)
 function PetyaXAimbot:Setup(config)
     -- Core settings
     if config.Enabled ~= nil then self.Enabled = config.Enabled end
@@ -232,7 +232,13 @@ function PetyaXAimbot:Setup(config)
     end
     
     -- FOV & Range
-    if config.FOV then self.FOV = math.clamp(config.FOV, 10, 360) end
+    if config.FOV then 
+        if type(config.FOV) == "table" then
+            self.FOV = config.FOV.Size or 80
+        else
+            self.FOV = math.clamp(config.FOV, 10, 360)
+        end
+    end
     if config.MaxDistance then self.MaxDistance = math.max(10, config.MaxDistance) end
     if config.ShowFOV ~= nil then self.ShowFOV = config.ShowFOV end
     
@@ -259,10 +265,11 @@ function PetyaXAimbot:Setup(config)
     return "FPS Aimbot configured - Enemy targeting only"
 end
 
--- Hotkey setup
+-- Hotkey setup (FIXED NIL CALL)
 function PetyaXAimbot:SetupHotkey()
     if self._hotkeyConnection then
         self._hotkeyConnection:Disconnect()
+        self._hotkeyConnection = nil
     end
     
     self._hotkeyConnection = UserInputService.InputBegan:Connect(function(input)
@@ -270,7 +277,6 @@ function PetyaXAimbot:SetupHotkey()
             if self.ToggleMode then
                 self.Enabled = not self.Enabled
                 self._isAiming = self.Enabled
-                print("🎯 Aimbot: " .. (self.Enabled and "ENABLED" or "DISABLED"))
             else
                 self._isAiming = true
             end
@@ -281,6 +287,7 @@ function PetyaXAimbot:SetupHotkey()
     if not self.ToggleMode then
         if self._hotkeyRelease then
             self._hotkeyRelease:Disconnect()
+            self._hotkeyRelease = nil
         end
         
         self._hotkeyRelease = UserInputService.InputEnded:Connect(function(input)
@@ -288,7 +295,7 @@ function PetyaXAimbot:SetupHotkey()
                 self._isAiming = false
                 self._target = nil
             end
-        end
+        end)
     end
 end
 
@@ -299,8 +306,6 @@ function PetyaXAimbot:Start()
     self._connection = RunService.RenderStepped:Connect(function()
         self:AimbotLoop()
     end)
-    
-    print("🎯 FPS Aimbot ACTIVATED - Enemy targeting only")
 end
 
 -- Stop aimbot
@@ -311,7 +316,6 @@ function PetyaXAimbot:Stop()
     end
     self._target = nil
     self._isAiming = false
-    print("🎯 FPS Aimbot DEACTIVATED")
 end
 
 -- Enable/Disable
@@ -329,13 +333,9 @@ end
 
 -- Get current target info
 function PetyaXAimbot:GetTargetInfo()
-    if not self._target then return nil end
+    if not self._target then return "No target" end
     
-    return {
-        Player = self._target.Player.Name,
-        AimPart = self._target.AimPart.Name,
-        Distance = math.floor(self._target.Distance)
-    }
+    return "Target: " .. self._target.Player.Name .. " (" .. self._target.AimPart.Name .. ")"
 end
 
 -- Cleanup
