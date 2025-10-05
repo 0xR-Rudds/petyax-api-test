@@ -1,6 +1,6 @@
--- PetyaX-API.lua - Fixed Main File
+-- PetyaX-API.lua - Fixed without auto-auth
 local PetyaX = {
-    _VERSION = "2.2.1",
+    _VERSION = "2.2.2",
     _AUTHOR = "PetyaX Premium",
     _LICENSE = "Lifetime"
 }
@@ -15,14 +15,15 @@ local CurrentCamera = workspace.CurrentCamera
 
 print("🚀 Loading PetyaX Premium " .. PetyaX._VERSION)
 
--- Authentication
-local authSuccess, authResult = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/refs/heads/main/src/PetyaXAuth.lua"))()
-end)
-
-if not authSuccess then
-    warn("❌ Failed to load PetyaXAuth: " .. tostring(authResult))
-end
+-- Don't auto-load auth - let client handle it
+PetyaX.Auth = {
+    VerifyKey = function(key)
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/refs/heads/main/src/PetyaXAuth.lua"))().VerifyKey(key)
+    end,
+    IsVerified = function()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/refs/heads/main/src/PetyaXAuth.lua"))().IsVerified()
+    end
+}
 
 -- Load Aimbot Module
 local aimbotSuccess, aimbotModule = pcall(function()
@@ -50,7 +51,7 @@ else
     PetyaX.ESP = {Setup = function() return "ESP not loaded" end, Enable = function() end}
 end
 
--- Essential Utilities (Keep these)
+-- Essential Utilities
 PetyaX.Memory = {
     Read = function(address, type)
         local success, result = pcall(function()
