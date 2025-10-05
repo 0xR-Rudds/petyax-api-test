@@ -1,64 +1,101 @@
---Latest
-print("🔐 Auth script loaded!")
-local key = script_key or "NO_KEY"
-print("Key received:", key)
+-- PetyaXAuth.lua - Fixed Version
+local PetyaXAuth = {}
 
-if not key or key == "" then return end
-if not key:match("^PXL_") then return end
-
-print("🔄 Starting authentication...")
+-- Configuration
+local API_URL = "http://127.0.0.1:5000/verify"
+local HWID = nil
+local Verified = false
+local LastCheck = 0
+local CheckCooldown = 30 -- seconds
 
 -- Generate HWID
-local client_id = game:GetService("RbxAnalyticsService"):GetClientId() or "unknown"
-local executor_name = getexecutorname and getexecutorname() or "unknown"
-local hwid = "machine_" .. client_id .. "|executor_" .. executor_name
-
--- Call API
-local api_url = "http://127.0.0.1:5000/verify?key=" .. key .. "&hwid=" .. hwid
-
-local success, result = pcall(function()
-    return game:HttpGet(api_url)
-end)
-
-if not success then 
-    print("❌ API Error:", result)
-    return 
-end
-
-local jsonSuccess, data = pcall(function()
-    return game:GetService("HttpService"):JSONDecode(result)
-end)
-
-if not jsonSuccess then 
-    print("❌ JSON Error")
-    return 
-end
-
-if data.success then
-    print("🎉 Authentication successful!")
+function PetyaXAuth.GenerateHWID()
+    if HWID then return HWID end
     
-    -- CORRECT MAIN SCRIPT URL
-    local main_url = "https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/PetyaX-API.lua"
-    print("📦 Loading main script: " .. main_url)
+    local identifiers = ""
     
-    local loadSuccess, content = pcall(function()
-        return game:HttpGet(main_url)
+    -- Use multiple system identifiers for uniqueness
+    local success, result = pcall(function()
+        -- Game join time
+        identifiers = identifiers .. tostring(tick())
+        
+        -- Player userId
+        if game:GetService("Players").LocalPlayer then
+            identifiers = identifiers .. tostring(game:GetService("Players").LocalPlayer.UserId)
+        end
+        
+        -- Random component
+        identifiers = identifiers .. tostring(math.random(10000, 99999))
     end)
     
-    if loadSuccess then
-        print("✅ Main script downloaded!")
-        local execSuccess, execError = pcall(function()
-            loadstring(content)()
-        end)
-        if execSuccess then
-            print("✨ Main script executed successfully!")
-        else
-            print("❌ Main script execution error:", execError)
-        end
-    else
-        print("❌ Failed to download main script:", content)
-    end
-else
-    print("❌ Auth failed:", data.error)
+    -- Create hash
+    HWID = tostring(string.len(identifiers)) .. string.sub(identifiers, 1, 10)
+    return HWID
 end
 
+-- Verify Key (FIXED - No infinite loop)
+function PetyaXAuth.VerifyKey(Key)
+    if Verified then
+        return true, "Already verified"
+    end
+    
+    -- Cooldown check
+    if tick() - LastCheck < CheckCooldown then
+        return false, "Please wait before verifying again"
+    end
+    
+    LastCheck = tick()
+    
+    if not Key or Key == "" then
+        return false, "No key provided"
+    end
+    
+    -- Generate HWID if not exists
+    local hwid = PetyaXAuth.GenerateHWID()
+    
+    -- Make API request
+    local success, result = pcall(function()
+        local url = API_URL .. "?key=" .. Key .. "&hwid=" .. hwid
+        return game:HttpGet(url)
+    end)
+    
+    if not success then
+        return false, "API connection failed: " .. tostring(result)
+    end
+    
+    -- Parse response
+    local parseSuccess, responseData = pcall(function()
+        return game:GetService("HttpService"):JSONDecode(result)
+    end)
+    
+    if not parseSuccess then
+        return false, "Invalid API response"
+    end
+    
+    if responseData.success then
+        Verified = true
+        return true, responseData.message or "Verification successful"
+    else
+        return false, responseData.error or "Verification failed"
+    end
+end
+
+-- Check if verified
+function PetyaXAuth.IsVerified()
+    return Verified
+end
+
+-- Get HWID
+function PetyaXAuth.GetHWID()
+    return PetyaXAuth.GenerateHWID()
+end
+
+-- Reset verification (for testing)
+function PetyaXAuth.Reset()
+    Verified = false
+    LastCheck = 0
+end
+
+print("🔐 PetyaX Auth Loaded - HWID: " .. PetyaXAuth.GenerateHWID())
+
+return PetyaXAuth
