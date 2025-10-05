@@ -1,3 +1,4 @@
+-- PetyaX FPS Aimbot - Rivals, HyperShot, Counter Blox
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -5,82 +6,127 @@ local LocalPlayer = Players.LocalPlayer
 local CurrentCamera = workspace.CurrentCamera
 
 local PetyaXAimbot = {
+    -- Core Settings
     Enabled = false,
     TeamCheck = true,
     VisibilityCheck = true,
-    FOV = 100,
-    Sensitivity = 50,
-    Smoothing = 0.3,
-    AimPart = "Head",
-    Prediction = false,
-    Hotkey = "MouseButton2",
     
+    -- Targeting
+    AimPart = "Head",
+    AutoSwitchPart = true, -- Switch to body if head not visible
+    
+    -- Sensitivity & Smoothing
+    Sensitivity = 50, -- In-game sensitivity (1-100)
+    Smoothing = 0.3, -- Aim smoothing (0.1-1.0)
+    SmoothingCurve = "Linear", -- Linear, Quadratic, Cubic
+    
+    -- FOV & Range
+    FOV = 80,
+    MaxDistance = 500,
+    ShowFOV = false,
+    
+    -- Prediction
+    Prediction = true,
+    PredictionStrength = 1.2,
+    
+    -- Activation
+    Hotkey = "MouseButton2",
+    ToggleMode = false,
+    
+    -- Internal
     _target = nil,
     _connection = nil,
+    _fovCircle = nil,
     _isAiming = false,
     _hotkeyConnection = nil,
     _hotkeyRelease = nil
 }
 
-function PetyaXAimbot:Setup(config)
-    print("🎯 Configuring Aimbot...")
-    
-    if config.Enabled ~= nil then self.Enabled = config.Enabled end
-    if config.TeamCheck ~= nil then self.TeamCheck = config.TeamCheck end
-    if config.VisibilityCheck ~= nil then self.VisibilityCheck = config.VisibilityCheck end
-    if config.Target then self.AimPart = config.Target end
-    if config.Sensitivity then self.Sensitivity = config.Sensitivity end
-    if config.Smoothing then self.Smoothing = config.Smoothing end
-    if config.Prediction ~= nil then self.Prediction = config.Prediction end
-    if config.Hotkey then self.Hotkey = config.Hotkey end
-    
-    if config.FOV then
-        if type(config.FOV) == "table" then
-            if config.FOV.Size then self.FOV = config.FOV.Size end
-            if config.FOV.Enabled ~= nil then self.ShowFOV = config.FOV.Enabled end
-        else
-            self.FOV = config.FOV
-        end
-    end
-    
-    self:SetupHotkey()
-    
-    if self.Enabled then
-        self:Start()
-    else
-        self:Stop()
-    end
-    
-    return "Aimbot configured - Sens: " .. self.Sensitivity .. ", FOV: " .. self.FOV
+-- Convert sensitivity to smoothing factor
+function PetyaXAimbot:GetSmoothFactor()
+    return math.clamp(1 - (self.Sensitivity / 100), 0.1, 0.9) * self.Smoothing
 end
 
-function PetyaXAimbot:SetupHotkey()
-    if self._hotkeyConnection then
-        self._hotkeyConnection:Disconnect()
+-- Apply smoothing curve
+function PetyaXAimbot:ApplySmoothing(current, target, delta)
+    local smoothFactor = self:GetSmoothFactor()
+    
+    if self.SmoothingCurve == "Quadratic" then
+        return current + (target - current) * smoothFactor * smoothFactor
+    elseif self.SmoothingCurve == "Cubic" then
+        return current + (target - current) * smoothFactor * smoothFactor * smoothFactor
+    else -- Linear
+        return current + (target - current) * smoothFactor
     end
-    
-    self._hotkeyConnection = UserInputService.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType[self.Hotkey] then
-            self._isAiming = true
-        end
-    end)
-    
-    if self._hotkeyRelease then
-        self._hotkeyRelease:Disconnect()
-    end
-    
-    self._hotkeyRelease = UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType[self.Hotkey] then
-            self._isAiming = false
-            self._target = nil
-        end
-    end)
 end
 
-function PetyaXAimbot:GetClosestPlayerToCursor()
-    local closestPlayer = nil
+-- Get valid aim part
+function PetyaXAimbot:GetAimPart(character)
+    local preferredPart = character:FindFirstChild(self.AimPart)
+    
+    if preferredPart and self:IsPartVisible(preferredPart) then
+        return preferredPart
+    end
+    
+    -- Auto-switch if part not visible
+    if self.AutoSwitchPart then
+        local fallbackParts = {"HumanoidRootPart", "UpperTorso", "Torso", "Head"}
+        for _, partName in ipairs(fallbackParts) do
+            local part = character:FindFirstChild(partName)
+            if part and self:IsPartVisible(part) then
+                return part
+            end
+        end
+    end
+    
+    return preferredPart
+end
+
+-- Visibility check with raycast
+function PetyaXAimbot:IsPartVisible(part)
+    if not self.VisibilityCheck then return true end
+    
+    local localCharacter = LocalPlayer.Character
+    if not localCharacter then return false end
+    
+    local localHead = localCharacter:FindFirstChild("Head")
+    if not localHead then return false end
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {localCharacter, part.Parent}
+    
+    local rayOrigin = CurrentCamera.CFrame.Position
+    local rayDirection = (part.Position - rayOrigin).Unit * self.MaxDistance
+    local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+    
+    return not raycastResult or raycastResult.Instance:IsDescendantOf(part.Parent)
+end
+
+-- Calculate bullet prediction
+function PetyaXAimbot:CalculatePrediction(character, part)
+    if not self.Prediction then return part.Position end
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+    if not rootPart then return part.Position end
+    
+    -- Get target velocity
+    local velocity = rootPart.Velocity
+    
+    -- Estimate bullet travel time (adjust based on game)
+    local distance = (part.Position - CurrentCamera.CFrame.Position).Magnitude
+    local travelTime = distance / 1000 -- Adjust this value per game
+    
+    -- Apply prediction
+    return part.Position + (velocity * travelTime * self.PredictionStrength)
+end
+
+-- Get best target within FOV (ENEMIES ONLY)
+function PetyaXAimbot:GetBestTarget()
+    local bestTarget = nil
     local closestDistance = self.FOV
-    
+    local localTeam = LocalPlayer.Team
+
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then goto continue end
         if not player.Character then goto continue end
@@ -89,79 +135,164 @@ function PetyaXAimbot:GetClosestPlayerToCursor()
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         if not humanoid or humanoid.Health <= 0 then goto continue end
         
-        if self.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
-            goto continue
+        -- ENEMY ONLY CHECK - Only target players not on our team
+        if self.TeamCheck then
+            if player.Team and localTeam and player.Team == localTeam then
+                goto continue -- Skip teammates
+            end
         end
         
-        local aimPart = character:FindFirstChild(self.AimPart) or character:FindFirstChild("HumanoidRootPart")
+        -- Distance check
+        local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("UpperTorso")
+        if not rootPart then goto continue end
+        
+        local distance = (rootPart.Position - CurrentCamera.CFrame.Position).Magnitude
+        if distance > self.MaxDistance then goto continue end
+        
+        -- Get aim part
+        local aimPart = self:GetAimPart(character)
         if not aimPart then goto continue end
         
+        -- FOV check
         local screenPoint, onScreen = CurrentCamera:WorldToViewportPoint(aimPart.Position)
         if not onScreen then goto continue end
         
-        local mouseLocation = UserInputService:GetMouseLocation()
-        local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - mouseLocation).Magnitude
+        local mousePos = UserInputService:GetMouseLocation()
+        local screenDistance = (Vector2.new(screenPoint.X, screenPoint.Y) - mousePos).Magnitude
         
-        if distance < closestDistance then
-            closestDistance = distance
-            closestPlayer = player
+        if screenDistance < closestDistance then
+            closestDistance = screenDistance
+            bestTarget = {
+                Player = player,
+                Character = character,
+                AimPart = aimPart,
+                Distance = distance
+            }
         end
         
         ::continue::
     end
     
-    return closestPlayer
+    return bestTarget
 end
 
-function PetyaXAimbot:IsVisible(character)
-    if not self.VisibilityCheck then return true end
+-- Smooth aim at target
+function PetyaXAimbot:AimAtTarget(target)
+    if not target then return end
     
-    local localCharacter = LocalPlayer.Character
-    if not localCharacter then return false end
+    local predictedPosition = self:CalculatePrediction(target.Character, target.AimPart)
+    local camera = CurrentCamera
+    local currentCFrame = camera.CFrame
     
-    local localHead = localCharacter:FindFirstChild("Head")
-    local targetHead = character:FindFirstChild("Head")
+    -- Calculate direction to target
+    local lookVector = (predictedPosition - currentCFrame.Position).Unit
     
-    if not localHead or not targetHead then return false end
+    -- Apply smoothing
+    local currentLook = currentCFrame.LookVector
+    local smoothedLook = self:ApplySmoothing(currentLook, lookVector, RunService.RenderStepped:Wait())
     
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = {localCharacter, character}
-    
-    local rayOrigin = localHead.Position
-    local rayDirection = (targetHead.Position - rayOrigin).Unit * 1000
-    local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-    
-    return not raycastResult or raycastResult.Instance:IsDescendantOf(character)
+    -- Set camera
+    camera.CFrame = CFrame.lookAt(currentCFrame.Position, currentCFrame.Position + smoothedLook)
 end
 
+-- Main aimbot loop
 function PetyaXAimbot:AimbotLoop()
     if not self.Enabled or not self._isAiming then return end
     
-    local target = self:GetClosestPlayerToCursor()
+    local target = self:GetBestTarget()
     
-    if target and target.Character then
-        local character = target.Character
-        local aimPart = character:FindFirstChild(self.AimPart) or character:FindFirstChild("HumanoidRootPart")
-        
-        if aimPart and self:IsVisible(character) then
-            self._target = target
-            
-            local camera = workspace.CurrentCamera
-            local currentCFrame = camera.CFrame
-            
-            local smoothFactor = math.clamp(1 - (self.Sensitivity / 100), 0.1, 0.9) * self.Smoothing
-            local direction = (aimPart.Position - currentCFrame.Position).Unit
-            local currentDirection = currentCFrame.LookVector
-            local smoothedDirection = currentDirection:Lerp(direction, smoothFactor)
-            
-            camera.CFrame = CFrame.lookAt(currentCFrame.Position, currentCFrame.Position + smoothedDirection)
-        end
+    if target then
+        self._target = target
+        self:AimAtTarget(target)
     else
         self._target = nil
     end
 end
 
+-- Setup function
+function PetyaXAimbot:Setup(config)
+    -- Core settings
+    if config.Enabled ~= nil then self.Enabled = config.Enabled end
+    if config.TeamCheck ~= nil then self.TeamCheck = config.TeamCheck end
+    if config.VisibilityCheck ~= nil then self.VisibilityCheck = config.VisibilityCheck end
+    
+    -- Targeting
+    if config.Target then self.AimPart = config.Target end
+    if config.AutoSwitchPart ~= nil then self.AutoSwitchPart = config.AutoSwitchPart end
+    
+    -- Sensitivity & Smoothing
+    if config.Sensitivity then 
+        self.Sensitivity = math.clamp(config.Sensitivity, 1, 100)
+    end
+    if config.Smoothing then 
+        self.Smoothing = math.clamp(config.Smoothing, 0.1, 1.0)
+    end
+    if config.SmoothingCurve then 
+        self.SmoothingCurve = config.SmoothingCurve 
+    end
+    
+    -- FOV & Range
+    if config.FOV then self.FOV = math.clamp(config.FOV, 10, 360) end
+    if config.MaxDistance then self.MaxDistance = math.max(10, config.MaxDistance) end
+    if config.ShowFOV ~= nil then self.ShowFOV = config.ShowFOV end
+    
+    -- Prediction
+    if config.Prediction ~= nil then self.Prediction = config.Prediction end
+    if config.PredictionStrength then 
+        self.PredictionStrength = math.clamp(config.PredictionStrength, 0.1, 3.0)
+    end
+    
+    -- Activation
+    if config.Hotkey then self.Hotkey = config.Hotkey end
+    if config.ToggleMode ~= nil then self.ToggleMode = config.ToggleMode end
+    
+    -- Setup hotkey
+    self:SetupHotkey()
+    
+    -- Start if enabled
+    if self.Enabled then
+        self:Start()
+    else
+        self:Stop()
+    end
+    
+    return "FPS Aimbot configured - Enemy targeting only"
+end
+
+-- Hotkey setup
+function PetyaXAimbot:SetupHotkey()
+    if self._hotkeyConnection then
+        self._hotkeyConnection:Disconnect()
+    end
+    
+    self._hotkeyConnection = UserInputService.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType[self.Hotkey] then
+            if self.ToggleMode then
+                self.Enabled = not self.Enabled
+                self._isAiming = self.Enabled
+                print("🎯 Aimbot: " .. (self.Enabled and "ENABLED" or "DISABLED"))
+            else
+                self._isAiming = true
+            end
+        end
+    end)
+    
+    -- Release to stop (for hold mode)
+    if not self.ToggleMode then
+        if self._hotkeyRelease then
+            self._hotkeyRelease:Disconnect()
+        end
+        
+        self._hotkeyRelease = UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType[self.Hotkey] then
+                self._isAiming = false
+                self._target = nil
+            end
+        end
+    end
+end
+
+-- Start aimbot
 function PetyaXAimbot:Start()
     if self._connection then return end
     
@@ -169,9 +300,10 @@ function PetyaXAimbot:Start()
         self:AimbotLoop()
     end)
     
-    print("🎯 Aimbot ACTIVATED")
+    print("🎯 FPS Aimbot ACTIVATED - Enemy targeting only")
 end
 
+-- Stop aimbot
 function PetyaXAimbot:Stop()
     if self._connection then
         self._connection:Disconnect()
@@ -179,21 +311,34 @@ function PetyaXAimbot:Stop()
     end
     self._target = nil
     self._isAiming = false
-    print("🎯 Aimbot DEACTIVATED")
+    print("🎯 FPS Aimbot DEACTIVATED")
 end
 
+-- Enable/Disable
 function PetyaXAimbot:Enable()
     self.Enabled = true
     self:Start()
-    return "Aimbot enabled"
+    return "FPS Aimbot enabled - Enemy targeting"
 end
 
 function PetyaXAimbot:Disable()
     self.Enabled = false
     self:Stop()
-    return "Aimbot disabled"
+    return "FPS Aimbot disabled"
 end
 
+-- Get current target info
+function PetyaXAimbot:GetTargetInfo()
+    if not self._target then return nil end
+    
+    return {
+        Player = self._target.Player.Name,
+        AimPart = self._target.AimPart.Name,
+        Distance = math.floor(self._target.Distance)
+    }
+end
+
+-- Cleanup
 function PetyaXAimbot:Destroy()
     self:Stop()
     if self._hotkeyConnection then
