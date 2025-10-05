@@ -38,7 +38,7 @@ if data.success then
     print("🎉 Authentication successful!")
     
     -- CORRECT MAIN SCRIPT URL
-    local main_url = "https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/PetyaAPI-Library.lua"
+    local main_url = "https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/PetyaX-API.lua"
     print("📦 Loading main script: " .. main_url)
     
     local loadSuccess, content = pcall(function()
@@ -61,3 +61,4 @@ if data.success then
 else
     print("❌ Auth failed:", data.error)
 end
+
