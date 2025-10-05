@@ -1,48 +1,65 @@
-local script_key = script_key or ""
-if script_key == "" then return end
+print("🔐 Auth script loaded!")
+local key = script_key or "NO_KEY"
+print("Key received:", key)
 
-local API_URL = "http://127.0.0.1:5000"
-local MAIN_SCRIPT_URL = "https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/idk.lua"
-
-local PetyaX = {}
-PetyaX.ScriptKey = script_key
-PetyaX.API_URL = API_URL
-PetyaX.MainScriptURL = MAIN_SCRIPT_URL
-
-function PetyaX:GenerateHWID()
-    local client_id = game:GetService("RbxAnalyticsService"):GetClientId() or "unknown"
-    local executor_name = getexecutorname and getexecutorname() or "unknown"
-    return "machine_" .. client_id .. "|executor_" .. executor_name
+if not key or key == "" then
+    print("❌ No key provided")
+    return
 end
 
-function PetyaX:Authenticate()
-    if not self.ScriptKey:match("PXL") then return false end
+if not key:match("^PXL_") then
+    print("❌ Invalid key format")
+    return
+end
+
+print("🔄 Starting authentication...")
+
+-- Generate HWID
+local client_id = game:GetService("RbxAnalyticsService"):GetClientId() or "unknown"
+local executor_name = getexecutorname and getexecutorname() or "unknown"
+local hwid = "machine_" .. client_id .. "|executor_" .. executor_name
+
+print("🆔 HWID:", hwid)
+
+-- Call API
+local api_url = "http://127.0.0.1:5000/verify?key=" .. key .. "&hwid=" .. hwid
+print("🌐 Calling API...")
+
+local success, result = pcall(function()
+    return game:HttpGet(api_url)
+end)
+
+if not success then
+    print("❌ API Error:", result)
+    return
+end
+
+print("✅ API Response:", result)
+
+-- Parse response
+local jsonSuccess, data = pcall(function()
+    return game:GetService("HttpService"):JSONDecode(result)
+end)
+
+if not jsonSuccess then
+    print("❌ JSON Parse Error")
+    return
+end
+
+if data.success then
+    print("🎉 Authentication successful!")
     
-    local hwid = self:GenerateHWID()
-    local success, result = pcall(function()
-        return game:HttpGet(self.API_URL .. "/verify?key=" .. self.ScriptKey .. "&hwid=" .. hwid)
+    -- Load main script
+    print("📦 Loading main script...")
+    local main_url = "https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/main.lua"
+    local loadSuccess, loadError = pcall(function()
+        local main_script = game:HttpGet(main_url)
+        loadstring(main_script)()
     end)
     
-    if not success then return false end
-    
-    local jsonSuccess, data = pcall(function()
-        return game:GetService("HttpService"):JSONDecode(result)
-    end)
-    
-    if not jsonSuccess then return false end
-    
-    return data.success
+    if not loadSuccess then
+        print("❌ Main script error:", loadError)
+    end
+else
+    print("❌ Auth failed:", data.error or "Unknown error")
 end
-
-function PetyaX:LoadMainScript()
-    local success, error = pcall(function()
-        local script_content = game:HttpGet(self.MainScriptURL)
-        loadstring(script_content)()
-    end)
-    return success
-end
-
-if PetyaX:Authenticate() then
-    PetyaX:LoadMainScript()
-end
-
