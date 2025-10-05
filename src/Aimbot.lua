@@ -1,4 +1,4 @@
--- PetyaX Aimbot - Complete Fixed Version11111
+-- PetyaX Aimbot.lua - Complete Working Version
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,17 +6,29 @@ local LocalPlayer = Players.LocalPlayer
 local CurrentCamera = workspace.CurrentCamera
 
 local PetyaXAimbot = {
+    -- Core Settings
     Enabled = false,
     TeamCheck = true,
-    VisibilityCheck = false,
-    FOV = 100,
-    Smoothness = 0.3,
-    Prediction = false,
+    VisibilityCheck = true,
+    
+    -- Targeting
     AimPart = "Head",
+    
+    -- Sensitivity & Smoothing
+    Sensitivity = 50,
+    Smoothing = 0.3,
+    
+    -- FOV
+    FOV = 100,
+    ShowFOV = false,
+    
+    -- Activation
     Hotkey = "MouseButton2",
     
+    -- Internal
     _target = nil,
-    _connection = nil
+    _connection = nil,
+    _isAiming = false
 }
 
 -- Setup function
@@ -25,16 +37,15 @@ function PetyaXAimbot:Setup(config)
     
     if config.Enabled ~= nil then self.Enabled = config.Enabled end
     if config.Target then self.AimPart = config.Target end
-    if config.Sensitivity then 
-        self.Smoothness = 1 - config.Sensitivity
-    end
+    if config.Sensitivity then self.Sensitivity = config.Sensitivity end
+    if config.Smoothing then self.Smoothing = config.Smoothing end
+    if config.FOV then self.FOV = config.FOV end
     if config.Hotkey then self.Hotkey = config.Hotkey end
-    if config.FOV then
-        if config.FOV.Size then self.FOV = config.FOV.Size end
-        if config.FOV.Enabled ~= nil then self.ShowFOV = config.FOV.Enabled end
+    
+    if config.FOV and config.FOV.Enabled ~= nil then 
+        self.ShowFOV = config.FOV.Enabled 
     end
     
-    -- Setup hotkey
     self:SetupHotkey()
     
     if self.Enabled then
@@ -43,10 +54,10 @@ function PetyaXAimbot:Setup(config)
         self:Stop()
     end
     
-    return "Aimbot configured"
+    return "Aimbot configured successfully"
 end
 
--- Setup hotkey
+-- Hotkey setup
 function PetyaXAimbot:SetupHotkey()
     if self._hotkeyConnection then
         self._hotkeyConnection:Disconnect()
@@ -54,13 +65,17 @@ function PetyaXAimbot:SetupHotkey()
     
     self._hotkeyConnection = UserInputService.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType[self.Hotkey] then
-            self.Enabled = not self.Enabled
-            print("🎯 Aimbot: " .. (self.Enabled and "ENABLED" or "DISABLED"))
-            if self.Enabled then
-                self:Start()
-            else
-                self:Stop()
-            end
+            self._isAiming = true
+        end
+    end)
+    
+    if self._hotkeyRelease then
+        self._hotkeyRelease:Disconnect()
+    end
+    
+    self._hotkeyRelease = UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType[self.Hotkey] then
+            self._isAiming = false
         end
     end)
 end
@@ -103,9 +118,44 @@ function PetyaXAimbot:GetClosestPlayerToCursor()
     return closestPlayer
 end
 
+-- Visibility check
+function PetyaXAimbot:IsPartVisible(part)
+    if not self.VisibilityCheck then return true end
+    
+    local localCharacter = LocalPlayer.Character
+    if not localCharacter then return false end
+    
+    local localHead = localCharacter:FindFirstChild("Head")
+    if not localHead then return false end
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {localCharacter, part.Parent}
+    
+    local rayOrigin = localHead.Position
+    local rayDirection = (part.Position - rayOrigin).Unit * 1000
+    local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+    
+    return not raycastResult or raycastResult.Instance:IsDescendantOf(part.Parent)
+end
+
+-- Smooth aim function
+function PetyaXAimbot:SmoothAim(targetPosition)
+    local camera = workspace.CurrentCamera
+    local currentCFrame = camera.CFrame
+    
+    local direction = (targetPosition - currentCFrame.Position).Unit
+    local currentDirection = currentCFrame.LookVector
+    
+    local smoothFactor = math.clamp(1 - (self.Sensitivity / 100), 0.1, 0.9) * self.Smoothing
+    local smoothedDirection = currentDirection:Lerp(direction, smoothFactor)
+    
+    camera.CFrame = CFrame.lookAt(currentCFrame.Position, currentCFrame.Position + smoothedDirection)
+end
+
 -- Main aimbot loop
 function PetyaXAimbot:AimbotLoop()
-    if not self.Enabled then return end
+    if not self.Enabled or not self._isAiming then return end
     
     local target = self:GetClosestPlayerToCursor()
     
@@ -113,31 +163,21 @@ function PetyaXAimbot:AimbotLoop()
         local character = target.Character
         local aimPart = character:FindFirstChild(self.AimPart) or character:FindFirstChild("HumanoidRootPart")
         
-        if aimPart then
-            local targetPosition = aimPart.Position
-            local camera = workspace.CurrentCamera
-            
-            -- Simple smooth aiming
-            local currentCFrame = camera.CFrame
-            local lookVector = (targetPosition - currentCFrame.Position).Unit
-            local newCFrame = CFrame.lookAt(currentCFrame.Position, currentCFrame.Position + lookVector)
-            
-            camera.CFrame = currentCFrame:Lerp(newCFrame, self.Smoothness)
+        if aimPart and self:IsPartVisible(aimPart) then
+            self:SmoothAim(aimPart.Position)
         end
     end
 end
 
 -- Start aimbot
 function PetyaXAimbot:Start()
-    if self._connection then
-        self._connection:Disconnect()
-    end
+    if self._connection then return end
     
     self._connection = RunService.RenderStepped:Connect(function()
         self:AimbotLoop()
     end)
     
-    print("🎯 Aimbot started")
+    print("🎯 Aimbot ACTIVATED")
 end
 
 -- Stop aimbot
@@ -147,7 +187,7 @@ function PetyaXAimbot:Stop()
         self._connection = nil
     end
     self._target = nil
-    print("🎯 Aimbot stopped")
+    print("🎯 Aimbot DEACTIVATED")
 end
 
 -- Enable/Disable
@@ -167,6 +207,10 @@ function PetyaXAimbot:Destroy()
     if self._hotkeyConnection then
         self._hotkeyConnection:Disconnect()
     end
+    if self._hotkeyRelease then
+        self._hotkeyRelease:Disconnect()
+    end
 end
 
+print("✅ Aimbot module loaded")
 return PetyaXAimbot
