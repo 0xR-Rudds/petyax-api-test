@@ -1,4 +1,4 @@
--- PetyaX-API.lua - Fixed No Loading Loop
+-- PetyaX-API.lua - Fixed No Recursive Loading
 local PetyaX = {
     _VERSION = "2.3.0",
     _AUTHOR = "PetyaX Premium", 
@@ -15,13 +15,13 @@ local CurrentCamera = workspace.CurrentCamera
 
 print("🚀 Loading PetyaX Premium " .. PetyaX._VERSION)
 
--- Prevent recursive loading
-if getgenv().PetyaXLoading then
-    error("PetyaX is already loading!")
+-- Check if already loaded to prevent recursion
+if getgenv().PetyaX then
+    print("✅ PetyaX already loaded, returning existing instance")
+    return getgenv().PetyaX
 end
-getgenv().PetyaXLoading = true
 
--- Load Authentication (WITH ERROR HANDLING)
+-- Load Authentication
 local authSuccess, authResult = pcall(function()
     local authCode = game:HttpGet("https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/PetyaXAuth.lua")
     local authFunc = loadstring(authCode)
@@ -43,7 +43,7 @@ else
     }
 end
 
--- Load Aimbot Module (WITH ERROR HANDLING)
+-- Load Aimbot Module
 local aimbotSuccess, aimbotModule = pcall(function()
     local aimbotCode = game:HttpGet("https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/Aimbot.lua")
     local aimbotFunc = loadstring(aimbotCode)
@@ -54,21 +54,18 @@ if aimbotSuccess and aimbotModule then
     PetyaX.Aimbot = aimbotModule
     print("✅ Aimbot loaded successfully")
 else
-    warn("❌ Failed to load Aimbot - Using fallback")
+    warn("❌ Failed to load Aimbot")
     PetyaX.Aimbot = {
         Setup = function(config) 
-            return "Aimbot: Fallback mode - Check Aimbot.lua file" 
+            return "Aimbot: Fallback mode" 
         end,
-        Enable = function() 
-            print("Aimbot enabled (fallback)") 
-        end,
-        Disable = function() 
-            print("Aimbot disabled (fallback)") 
-        end
+        Enable = function() end,
+        Disable = function() end,
+        GetTargetInfo = function() return "No target" end
     }
 end
 
--- Load ESP Module (WITH ERROR HANDLING)
+-- Load ESP Module
 local espSuccess, espModule = pcall(function()
     local espCode = game:HttpGet("https://raw.githubusercontent.com/0xR-Rudds/petyax-api-test/main/src/Esp.lua")
     local espFunc = loadstring(espCode)
@@ -79,21 +76,17 @@ if espSuccess and espModule then
     PetyaX.ESP = espModule
     print("✅ ESP loaded successfully")
 else
-    warn("❌ Failed to load ESP - Using fallback")
+    warn("❌ Failed to load ESP")
     PetyaX.ESP = {
         Setup = function(config) 
-            return "ESP: Fallback mode - Check Esp.lua file" 
+            return "ESP: Fallback mode" 
         end,
-        Enable = function() 
-            print("ESP enabled (fallback)") 
-        end,
-        Disable = function() 
-            print("ESP disabled (fallback)") 
-        end
+        Enable = function() end,
+        Disable = function() end
     }
 end
 
--- Memory Management (Keep essential)
+-- Memory Management
 PetyaX.Memory = {
     Read = function(address, type)
         local success, result = pcall(function()
@@ -110,7 +103,7 @@ PetyaX.Memory = {
     end
 }
 
--- Drawing Utilities (Keep essential)
+-- Drawing Utilities
 PetyaX.Drawing = {
     Line = function(from, to, color, thickness)
         local line = Drawing.new("Line")
@@ -134,14 +127,14 @@ PetyaX.Drawing = {
     end
 }
 
--- Crosshair System (Simple)
+-- Crosshair System
 PetyaX.Crosshair = {
     Setup = function(self, config)
         return "Crosshair: Ready"
     end
 }
 
--- Entity Management (Simple)
+-- Entity Management
 PetyaX.Entities = {
     GetPlayers = function()
         return Players:GetPlayers()
@@ -166,24 +159,19 @@ PetyaX.Utils = {
     end
 }
 
--- API Information
+-- API Information (FIXED CONCATENATION)
 PetyaX.Info = {
     Version = PetyaX._VERSION,
     Author = PetyaX._AUTHOR,
     License = PetyaX._LICENSE,
-    Features = {
-        "FPS Aimbot System",
-        "Enemy-Only ESP", 
-        "Memory Management",
-        "Crosshair System"
-    }
+    Features = "FPS Aimbot System, Enemy-Only ESP, Memory Management, Crosshair System"
 }
 
--- Clear loading flag
-getgenv().PetyaXLoading = false
+-- Store in global to prevent re-loading
+getgenv().PetyaX = PetyaX
 
 -- Initialize message
 print("✅ PetyaX Premium " .. PetyaX._VERSION .. " loaded successfully!")
-print("📋 " .. table.concat(PetyaX.Info.Features, ", "))
+print("📋 " .. PetyaX.Info.Features)
 
 return PetyaX
