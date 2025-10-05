@@ -1,4 +1,4 @@
--- PetyaX Aimbot Module - Fixed Version
+-- PetyaX Aimbot - Complete Working Version
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -16,18 +16,16 @@ local PetyaXAimbot = {
     PredictionStrength = 0.165,
     Hotkey = "MouseButton2",
     
-    -- FOV Circle
     ShowFOV = false,
     FOVColor = Color3.new(1, 0, 0),
     
-    -- Internal variables
     _target = nil,
     _connection = nil,
     _fovCircle = nil,
     _hotkeyConnection = nil
 }
 
--- Setup function for client configuration
+-- Setup function
 function PetyaXAimbot:Setup(config)
     if config.Enabled ~= nil then self.Enabled = config.Enabled end
     if config.Target then self.AimPart = config.Target end
@@ -41,15 +39,18 @@ function PetyaXAimbot:Setup(config)
         if config.FOV.Enabled ~= nil then self.ShowFOV = config.FOV.Enabled end
     end
     
-    -- Initialize FOV circle if needed
     if self.ShowFOV and not self._fovCircle then
         self:CreateFOVCircle()
     end
     
-    -- Setup hotkey
     self:SetupHotkey()
     
-    print("✅ Aimbot configured: " .. (self.Enabled and "ENABLED" or "DISABLED"))
+    if self.Enabled then
+        self:Start()
+    else
+        self:Stop()
+    end
+    
     return "Aimbot configured successfully"
 end
 
@@ -70,14 +71,12 @@ function PetyaXAimbot:CreateFOVCircle()
     
     self._fovCircle = circle
     
-    -- Update circle position on camera change
     if not self._fovUpdate then
         self._fovUpdate = RunService.RenderStepped:Connect(function()
             if self._fovCircle then
                 self._fovCircle.Position = Vector2.new(CurrentCamera.ViewportSize.X / 2, CurrentCamera.ViewportSize.Y / 2)
                 self._fovCircle.Radius = self.FOV
                 self._fovCircle.Visible = self.ShowFOV
-                self._fovCircle.Color = self.FOVColor
             end
         end)
     end
@@ -90,8 +89,7 @@ function PetyaXAimbot:SetupHotkey()
     end
     
     self._hotkeyConnection = UserInputService.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType[self.Hotkey] or 
-           (self.Hotkey:sub(1, 1) == "[" and input.KeyCode == Enum.KeyCode[self.Hotkey:sub(2, -2)]) then
+        if input.UserInputType == Enum.UserInputType[self.Hotkey] then
             self.Enabled = not self.Enabled
             if self.Enabled then
                 self:Start()
@@ -113,21 +111,15 @@ function PetyaXAimbot:GetClosestPlayerToCursor()
             local humanoid = character:FindFirstChildOfClass("Humanoid")
             
             if humanoid and humanoid.Health > 0 then
-                -- Team check
                 if self.TeamCheck and player.Team == LocalPlayer.Team then
                     continue
                 end
                 
-                -- Visibility check
                 if self.VisibilityCheck and not self:IsVisible(character) then
                     continue
                 end
                 
-                local aimPart = character:FindFirstChild(self.AimPart)
-                if not aimPart then
-                    aimPart = character:FindFirstChild("HumanoidRootPart")
-                end
-                
+                local aimPart = character:FindFirstChild(self.AimPart) or character:FindFirstChild("HumanoidRootPart")
                 if aimPart then
                     local screenPoint, onScreen = CurrentCamera:WorldToViewportPoint(aimPart.Position)
                     
@@ -201,10 +193,7 @@ function PetyaXAimbot:AimbotLoop()
     
     if self._target and self._target.Character then
         local character = self._target.Character
-        local aimPart = character:FindFirstChild(self.AimPart)
-        if not aimPart then
-            aimPart = character:FindFirstChild("HumanoidRootPart")
-        end
+        local aimPart = character:FindFirstChild(self.AimPart) or character:FindFirstChild("HumanoidRootPart")
         
         if aimPart then
             local targetPosition = self:CalculatePrediction(character, aimPart)
@@ -234,7 +223,7 @@ function PetyaXAimbot:Stop()
     print("🎯 Aimbot DEACTIVATED")
 end
 
--- Enable/Disable functions
+-- Enable/Disable
 function PetyaXAimbot:Enable()
     self.Enabled = true
     self:Start()
