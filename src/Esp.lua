@@ -1,14 +1,12 @@
--- PetyaX ESP - Complete Working Version (Based on AirHub)
+-- PetyaX ESP - Complete Fixed Version
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
-local CurrentCamera = Workspace.CurrentCamera
+local CurrentCamera = workspace.CurrentCamera
 
 local PetyaXESP = {
     Enabled = false,
     
-    -- Configuration
     Boxes = true,
     Tracers = true,
     Names = true,
@@ -16,11 +14,9 @@ local PetyaXESP = {
     Distance = true,
     TeamCheck = true,
     
-    -- Colors
     TeamColor = Color3.fromRGB(0, 255, 0),
     EnemyColor = Color3.fromRGB(255, 0, 0),
     
-    -- Internal
     _drawings = {},
     _connections = {}
 }
@@ -32,11 +28,7 @@ function PetyaXESP:CreateESP(player)
     local drawings = {
         Box = Drawing.new("Square"),
         Tracer = Drawing.new("Line"),
-        Name = Drawing.new("Text"),
-        HealthBar = Drawing.new("Square"),
-        HealthBarBackground = Drawing.new("Square"),
-        HealthText = Drawing.new("Text"),
-        DistanceText = Drawing.new("Text")
+        Name = Drawing.new("Text")
     }
     
     -- Box
@@ -53,26 +45,6 @@ function PetyaXESP:CreateESP(player)
     drawings.Name.Outline = true
     drawings.Name.Center = true
     drawings.Name.Visible = false
-    
-    -- Health Bar
-    drawings.HealthBar.Thickness = 1
-    drawings.HealthBar.Filled = true
-    drawings.HealthBar.Visible = false
-    
-    drawings.HealthBarBackground.Thickness = 1
-    drawings.HealthBarBackground.Filled = true
-    drawings.HealthBarBackground.Color = Color3.new(0, 0, 0)
-    drawings.HealthBarBackground.Visible = false
-    
-    -- Health Text
-    drawings.HealthText.Size = 14
-    drawings.HealthText.Outline = true
-    drawings.HealthText.Visible = false
-    
-    -- Distance Text
-    drawings.DistanceText.Size = 14
-    drawings.DistanceText.Outline = true
-    drawings.DistanceText.Visible = false
     
     self._drawings[player] = drawings
 end
@@ -93,8 +65,6 @@ function PetyaXESP:UpdateESP()
     if not self.Enabled then return end
     
     local localPlayer = LocalPlayer
-    local localCharacter = localPlayer.Character
-    local localRoot = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
     
     for player, drawings in pairs(self._drawings) do
         local character = player.Character
@@ -102,16 +72,14 @@ function PetyaXESP:UpdateESP()
         local rootPart = character and character:FindFirstChild("HumanoidRootPart")
         
         if character and humanoid and humanoid.Health > 0 and rootPart then
-            -- Team check
-            local isTeammate = self.TeamCheck and player.Team == localPlayer.Team
+            local isTeammate = self.TeamCheck and player.Team and localPlayer.Team and player.Team == localPlayer.Team
             local color = isTeammate and self.TeamColor or self.EnemyColor
             
-            -- Get screen position
             local screenPosition, onScreen = CurrentCamera:WorldToViewportPoint(rootPart.Position)
             
             if onScreen then
-                -- Calculate box dimensions
-                local boxSize = Vector2.new(50, 80)
+                -- Simple box around player
+                local boxSize = Vector2.new(40, 60)
                 local boxPosition = Vector2.new(screenPosition.X - boxSize.X / 2, screenPosition.Y - boxSize.Y / 2)
                 
                 -- Update Box
@@ -143,63 +111,28 @@ function PetyaXESP:UpdateESP()
                 else
                     drawings.Name.Visible = false
                 end
-                
-                -- Update Health Bar
-                if self.HealthBars then
-                    local healthPercent = humanoid.Health / humanoid.MaxHealth
-                    local healthBarHeight = boxSize.Y * healthPercent
-                    local healthBarColor = Color3.new(1 - healthPercent, healthPercent, 0)
-                    
-                    drawings.HealthBarBackground.Size = Vector2.new(3, boxSize.Y)
-                    drawings.HealthBarBackground.Position = boxPosition - Vector2.new(6, 0)
-                    drawings.HealthBarBackground.Visible = true
-                    
-                    drawings.HealthBar.Size = Vector2.new(3, healthBarHeight)
-                    drawings.HealthBar.Position = drawings.HealthBarBackground.Position + Vector2.new(0, boxSize.Y - healthBarHeight)
-                    drawings.HealthBar.Color = healthBarColor
-                    drawings.HealthBar.Visible = true
-                    
-                    drawings.HealthText.Text = math.floor(humanoid.Health) .. " HP"
-                    drawings.HealthText.Position = drawings.HealthBarBackground.Position - Vector2.new(0, 15)
-                    drawings.HealthText.Color = healthBarColor
-                    drawings.HealthText.Visible = true
-                else
-                    drawings.HealthBar.Visible = false
-                    drawings.HealthBarBackground.Visible = false
-                    drawings.HealthText.Visible = false
-                end
-                
-                -- Update Distance
-                if self.Distance and localRoot then
-                    local distance = (localRoot.Position - rootPart.Position).Magnitude
-                    drawings.DistanceText.Text = math.floor(distance) .. "m"
-                    drawings.DistanceText.Position = Vector2.new(screenPosition.X, boxPosition.Y + boxSize.Y + 5)
-                    drawings.DistanceText.Color = color
-                    drawings.DistanceText.Visible = true
-                else
-                    drawings.DistanceText.Visible = false
-                end
             else
-                -- Hide all if not on screen
-                for _, drawing in pairs(drawings) do
-                    drawing.Visible = false
-                end
+                -- Hide if not on screen
+                drawings.Box.Visible = false
+                drawings.Tracer.Visible = false
+                drawings.Name.Visible = false
             end
         else
-            -- Hide all if player is invalid
-            for _, drawing in pairs(drawings) do
-                drawing.Visible = false
-            end
+            -- Hide if invalid
+            drawings.Box.Visible = false
+            drawings.Tracer.Visible = false
+            drawings.Name.Visible = false
         end
     end
 end
 
 -- Setup function
 function PetyaXESP:Setup(config)
-    if config.Boxes ~= nil then self.Boxes = config.Boxes.Enabled end
-    if config.Tracers ~= nil then self.Tracers = config.Tracers.Enabled end
-    if config.Names ~= nil then self.Names = config.Names.Enabled end
-    if config.HealthBar ~= nil then self.HealthBars = config.HealthBar.Enabled end
+    print("🔧 Configuring ESP...")
+    
+    if config.Boxes then self.Boxes = config.Boxes.Enabled end
+    if config.Tracers then self.Tracers = config.Tracers.Enabled end
+    if config.Names then self.Names = config.Names.Enabled end
     if config.Tracers and config.Tracers.Color then self.TeamColor = config.Tracers.Color end
     if config.Boxes and config.Boxes.Color then self.EnemyColor = config.Boxes.Color end
     
@@ -221,7 +154,7 @@ function PetyaXESP:Enable()
     
     -- Player added
     self._connections.playerAdded = Players.PlayerAdded:Connect(function(player)
-        task.wait(2)
+        task.wait(1)
         self:CreateESP(player)
     end)
     
@@ -235,7 +168,7 @@ function PetyaXESP:Enable()
         self:UpdateESP()
     end)
     
-    print("🎯 ESP ENABLED")
+    print("🎯 ESP enabled")
 end
 
 -- Disable ESP
@@ -251,12 +184,11 @@ function PetyaXESP:Disable()
     self._connections = {}
     
     -- Remove all drawings
-    for player, drawings in pairs(self._drawings) do
+    for player in pairs(self._drawings) do
         self:RemoveESP(player)
     end
-    self._drawings = {}
     
-    print("🎯 ESP DISABLED")
+    print("🎯 ESP disabled")
 end
 
 -- Cleanup
